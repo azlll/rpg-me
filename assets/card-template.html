@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<!--
+  人生游戏角色卡 · 小红书轮播卡组模板
+  HTML 是结果展示页，不是生成器。所有内容由 agent 生成后替换以下占位符：
+    {{CHAR_NAME}} {{CHAR_CLASS}} {{TITLE}} {{CHAR_LV}} {{TAGLINE}}
+    {{PORTRAIT_DATA_URI}}
+    {{STAT_HP}} {{STAT_MP}} {{STAT_EXP}} {{STAT_STRENGTH}} {{STAT_AGILITY}} {{STAT_INTELLIGENCE}}
+    {{STAT_SOCIAL}} {{STAT_CREATIVITY}} {{STAT_SLACK}} {{STAT_EMO}} {{STAT_LUCK}}
+    {{RACE}} {{TRAIT}} {{TALENT}}
+    {{ACTIVE_NAME}} {{ACTIVE_DESC}} {{PASSIVE_NAME}} {{PASSIVE_DESC}} {{QUEST_LIST}}
+    {{ANALYSIS}} {{DATE}} {{SERIAL}}
+    {{HISTORY_ITEMS}}
+-->
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>人生游戏角色卡 - {{CHAR_NAME}}</title>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    :root {
+      --card-width: 390px;
+      --page-bg: #151116;
+      --page-grid: rgba(255, 248, 242, 0.045);
+      --surface: #fff8f2;
+      --surface-strong: #ffffff;
+      --surface-soft: #fff1f2;
+      --ink: #24141c;
+      --ink-soft: #4f3d46;
+      --muted: #755d69;
+      --primary: #e11d48;
+      --primary-strong: #9f1239;
+      --secondary: #2563eb;
+      --mint: #0f766e;
+      --amber: #d97706;
+      --violet: #6d28d9;
+      --line: rgba(136, 19, 55, 0.16);
+      --panel: rgba(255, 255, 255, 0.74);
+      --panel-strong: rgba(255, 255, 255, 0.9);
+      --shadow: 0 26px 80px rgba(9, 8, 12, 0.42);
+      --radius-card: 8px;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: var(--page-bg); }
+
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      padding: 0;
+      font-family: "Inter", "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--surface);
+      background:
+        linear-gradient(135deg, rgba(225, 29, 72, 0.18), rgba(37, 99, 235, 0.12) 42%, rgba(15, 118, 110, 0.12)),
+        repeating-linear-gradient(90deg, transparent 0 31px, var(--page-grid) 31px 32px),
+        repeating-linear-gradient(0deg, transparent 0 31px, var(--page-grid) 31px 32px),
+        #151116;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    .app-shell {
+      width: min(1180px, 100%);
+      min-height: 100dvh;
+      margin: 0 auto;
+      padding: max(24px, env(safe-area-inset-top)) 16px 56px;
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .history-sidebar {
+      position: sticky;
+      top: 24px;
+      max-height: calc(100dvh - 48px);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 0;
+      padding: 14px;
+      border-radius: var(--radius);
+      background: rgba(255, 248, 242, 0.1);
+      border: 1px solid rgba(255, 248, 242, 0.16);
+      box-shadow: 0 18px 56px rgba(9, 8, 12, 0.28);
+      overflow: hidden;
+    }
+
+    .history-kicker {
+      display: block;
+      color: rgba(255, 248, 242, 0.58);
+      font-size: 11px;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
+
+    .history-heading {
+      margin: 3px 0 0;
+      color: #fff8f2;
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
+
+    .history-list {
+      display: grid;
+      gap: 8px;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .history-item {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 11px;
+      border-radius: var(--radius);
+      color: #fff8f2;
+      text-decoration: none;
+      background: rgba(255, 248, 242, 0.08);
+      border: 1px solid rgba(255, 248, 242, 0.12);
+      transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+    }
+
+    .history-item:hover,
+    .history-item.is-active {
+      background: rgba(255, 248, 242, 0.16);
+      border-color: rgba(255, 248, 242, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .history-title,
+    .history-meta,
+    .history-subtitle {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .history-title {
+      font-size: 14px;
+      font-weight: 950;
+      line-height: 1.25;
+    }
+
+    .history-meta {
+      color: rgba(255, 248, 242, 0.62);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .history-subtitle {
+      color: rgba(255, 248, 242, 0.82);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .history-empty {
+      margin: 0;
+      color: rgba(255, 248, 242, 0.7);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .deck-stage {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .toolbar {
+      width: min(100%, var(--card-width), calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .download-btn,
+    .card-download {
+      min-height: 44px;
+      border: 0;
+      border-radius: var(--radius);
+      cursor: pointer;
+      letter-spacing: 0;
+      font-weight: 900;
+      transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+      touch-action: manipulation;
+    }
+
+    .download-btn {
+      padding: 12px 18px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      box-shadow: 0 12px 30px rgba(225, 29, 72, 0.34);
+      font-size: 14px;
+    }
+
+    .download-all,
+    .card-download {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .button-icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .download-btn:hover,
+    .card-download:hover {
+      transform: translateY(-1px);
+      filter: saturate(1.08);
+    }
+
+    .download-btn:active,
+    .card-download:active {
+      transform: translateY(0);
+    }
+
+    .download-btn:disabled,
+    .card-download:disabled {
+      cursor: wait;
+      opacity: 0.72;
+      transform: none;
+    }
+
+    .download-btn:focus-visible,
+    .card-download:focus-visible {
+      outline: 3px solid rgba(255, 255, 255, 0.86);
+      outline-offset: 3px;
+    }
+
+    .download-status {
+      flex: 1 1 132px;
+      min-width: 0;
+      text-align: right;
+      color: rgba(255, 248, 242, 0.76);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .carousel-stack {
+      width: min(100%, var(--card-width), calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
+      display: grid;
+      gap: 28px;
+    }
+
+    .card-block {
+      display: grid;
+      gap: 10px;
+    }
+
+    .card-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .card-download {
+      padding: 9px 13px;
+      color: #fff8f2;
+      background: rgba(255, 248, 242, 0.1);
+      border: 1px solid rgba(255, 248, 242, 0.18);
+      box-shadow: 0 10px 24px rgba(9, 8, 12, 0.22);
+      font-size: 12px;
+    }
+
+    .share-card {
+      width: min(100%, var(--card-width), calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
+      aspect-ratio: 9 / 16;
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius-card);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 248, 242, 0.99)),
+        var(--surface);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      isolation: isolate;
+    }
+
+    .share-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(120deg, rgba(225, 29, 72, 0.1), transparent 38%, rgba(37, 99, 235, 0.1) 72%, rgba(15, 118, 110, 0.08)),
+        repeating-linear-gradient(135deg, rgba(136, 19, 55, 0.045) 0 1px, transparent 1px 18px);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .share-card::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background: linear-gradient(90deg, var(--primary), var(--amber), var(--mint), var(--secondary));
+    }
+
+    .card-inner {
+      position: relative;
+      height: 100%;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .page-mark,
+    .deck-label {
+      align-self: flex-start;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(225, 29, 72, 0.1);
+      color: var(--primary-strong);
+      font-size: 11px;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .cover-card .card-inner {
+      padding: 0;
+    }
+
+    .portrait-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      overflow: hidden;
+      background: var(--surface-soft);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .portrait-wrap::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      height: 38%;
+      background: linear-gradient(180deg, transparent, rgba(36, 20, 28, 0.18));
+      pointer-events: none;
+    }
+
+    .portrait-wrap .deck-label {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      z-index: 1;
+      background: rgba(255, 248, 242, 0.92);
+      box-shadow: 0 8px 18px rgba(36, 20, 28, 0.18);
+    }
+
+    .card-portrait {
+      width: 100%;
+      height: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      object-position: center 42%;
+      display: block;
+    }
+
+    .cover-body {
+      flex: 1;
+      padding: 14px 20px 14px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .card-name {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 950;
+      line-height: 1.12;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .card-class {
+      margin: 5px 0 0;
+      font-size: 12px;
+      line-height: 1.35;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .level-badge {
+      flex: 0 0 auto;
+      padding: 8px 11px;
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--primary-strong);
+      border: 1px solid rgba(225, 29, 72, 0.18);
+      box-shadow: 0 8px 18px rgba(225, 29, 72, 0.13);
+      font-size: 13px;
+      font-weight: 950;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .tagline {
+      display: inline-flex;
+      width: fit-content;
+      max-width: 100%;
+      margin: 9px 0 11px;
+      padding: 7px 10px;
+      border-radius: var(--radius);
+      background: rgba(15, 118, 110, 0.1);
+      color: var(--mint);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      min-height: 0;
+    }
+
+    .metric {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      min-height: 43px;
+      padding: 7px 8px;
+      border-radius: var(--radius);
+      background: var(--panel);
+      border: 1px solid rgba(136, 19, 55, 0.11);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    }
+
+    .svg-icon {
+      width: 22px;
+      height: 22px;
+      flex: 0 0 22px;
+      color: var(--primary);
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .metric:nth-child(2n) .svg-icon { color: var(--secondary); }
+    .metric:nth-child(3n) .svg-icon { color: var(--mint); }
+    .metric:nth-child(4n) .svg-icon { color: var(--amber); }
+
+    .metric-label {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .metric-value {
+      display: block;
+      margin-top: 2px;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 950;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .card-footer {
+      margin-top: auto;
+      padding-top: 8px;
+      text-align: center;
+      color: rgba(36, 20, 28, 0.5);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .section-title {
+      margin: 14px 0 10px;
+      color: var(--primary-strong);
+      font-size: 13px;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
+
+    .analysis-card .card-inner {
+      justify-content: space-between;
+    }
+
+    .analysis-title {
+      margin: 14px 0 12px;
+      font-size: 30px;
+      line-height: 1.05;
+      font-weight: 950;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .card-lead {
+      margin: 0 0 14px;
+      color: var(--primary-strong);
+      font-size: 13px;
+      line-height: 1.48;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    .analysis-text {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 15px;
+      line-height: 1.72;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 8;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .quote-band {
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(225, 29, 72, 0.12), rgba(37, 99, 235, 0.1));
+      border: 1px solid rgba(225, 29, 72, 0.14);
+      color: var(--primary-strong);
+      font-size: 14px;
+      line-height: 1.55;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .profile-card .icon-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .profile-card .metric {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 7px;
+      padding: 9px;
+      min-height: 74px;
+    }
+
+    .profile-card .metric-value {
+      font-size: 19px;
+    }
+
+    .persona-grid {
+      display: grid;
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    .trait-chip {
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr);
+      align-items: center;
+      gap: 9px;
+      min-height: 54px;
+      padding: 10px 11px;
+      border-radius: var(--radius);
+      background: rgba(36, 20, 28, 0.055);
+      border: 1px solid rgba(136, 19, 55, 0.1);
+    }
+
+    .trait-chip .svg-icon {
+      width: 20px;
+      height: 20px;
+      flex-basis: 20px;
+    }
+
+    .identity-label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      margin-bottom: 3px;
+    }
+
+    .identity-value {
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 950;
+      line-height: 1.28;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .skill-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .skill-card {
+      padding: 14px;
+      border-radius: var(--radius);
+      background: var(--panel-strong);
+      border: 1px solid rgba(136, 19, 55, 0.12);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    }
+
+    .skill-type {
+      color: var(--primary-strong);
+      font-size: 11px;
+      font-weight: 950;
+      margin-bottom: 6px;
+    }
+
+    .skill-name {
+      color: var(--ink);
+      font-size: 18px;
+      line-height: 1.2;
+      font-weight: 950;
+      margin-bottom: 7px;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .skill-desc {
+      color: var(--ink-soft);
+      font-size: 13px;
+      line-height: 1.55;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .quests {
+      list-style: none;
+      padding: 0;
+      margin: 10px 0 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .quests li {
+      position: relative;
+      padding: 9px 10px 9px 28px;
+      border-radius: var(--radius);
+      background: rgba(37, 99, 235, 0.07);
+      border: 1px solid rgba(37, 99, 235, 0.13);
+      color: var(--ink-soft);
+      font-size: 13px;
+      line-height: 1.4;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .quests li::before {
+      content: "";
+      position: absolute;
+      left: 12px;
+      top: 16px;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--secondary);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.11);
+    }
+
+    @media (max-width: 860px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+        gap: 18px;
+        padding-inline: 12px;
+      }
+
+      .history-sidebar {
+        position: static;
+        max-height: none;
+      }
+
+      .history-list {
+        display: flex;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 0 3px;
+        scroll-snap-type: x proximity;
+      }
+
+      .history-item {
+        flex: 0 0 220px;
+        scroll-snap-align: start;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .app-shell { padding-inline: 12px; }
+
+      .toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .download-btn { width: 100%; }
+
+      .download-status { text-align: center; }
+
+      .card-inner { padding: 18px; }
+
+      .cover-body { padding: 13px 17px 13px; }
+
+      .card-name { font-size: 22px; }
+
+      .analysis-title { font-size: 27px; }
+
+      .analysis-text { font-size: 14px; }
+
+      .profile-card .icon-grid { gap: 7px; }
+
+      .profile-card .metric { padding: 8px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="history-sidebar" aria-label="生成历史">
+      <div>
+        <span class="history-kicker">RPG ME</span>
+        <h1 class="history-heading">生成历史</h1>
+      </div>
+      <nav class="history-list" aria-label="历史角色列表">
+        {{HISTORY_ITEMS}}
+      </nav>
+    </aside>
+
+    <div class="deck-stage">
+      <div class="toolbar">
+        <button class="download-btn download-all" data-download-all data-busy-text="正在导出..." aria-label="下载全部卡片">
+          <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+          <span class="download-label">下载全部 4 张</span>
+        </button>
+        <span class="download-status" aria-live="polite">逐张 PNG 导出，适合小红书轮播发布</span>
+      </div>
+
+      <main class="carousel-stack" aria-label="人生游戏角色卡组">
+    <section class="card-block">
+      <article class="share-card cover-card" id="card-cover" data-card-kind="cover" data-filename="rpg-me-01-cover.png">
+        <div class="card-inner">
+          <div class="portrait-wrap">
+            <span class="deck-label">01 / 04 · RPG ME</span>
+            <img class="card-portrait" src="{{PORTRAIT_DATA_URI}}" alt="角色立绘" loading="eager" decoding="async" data-rpg-image />
+          </div>
+          <div class="cover-body">
+            <div class="title-row">
+              <div>
+                <h2 class="card-name" data-rpg-field="CHAR_NAME">{{CHAR_NAME}}</h2>
+                <p class="card-class" data-rpg-field="CHAR_CLASS">{{CHAR_CLASS}}</p>
+              </div>
+              <div class="level-badge">Lv.<span data-rpg-field="CHAR_LV">{{CHAR_LV}}</span></div>
+            </div>
+            <div class="tagline">「<span data-rpg-field="TAGLINE">{{TAGLINE}}</span>」</div>
+            <div class="icon-grid">
+              <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z"/></svg><span><span class="metric-label">体力</span><span class="metric-value" data-rpg-field="STAT_HP">{{STAT_HP}}</span></span></div>
+              <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8a4 4 0 1 0 0-1m10 2a3 3 0 1 0 0-1M3 21c0-3 2.5-5 5-5s5 2 5 5m4 0c0-2-1.2-3.5-3-4.4"/></svg><span><span class="metric-label">社交</span><span class="metric-value" data-rpg-field="STAT_SOCIAL">{{STAT_SOCIAL}}</span></span></div>
+              <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6m-5 3h4m-7-8a6 6 0 1 1 10 0c-1 1-2 2.5-2 4H9c0-1.5-1-3-2-4z"/></svg><span><span class="metric-label">创造</span><span class="metric-value" data-rpg-field="STAT_CREATIVITY">{{STAT_CREATIVITY}}</span></span></div>
+              <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15c4 0 4-6 8-6s4 6 8 6M5 19h14M8 5h8"/></svg><span><span class="metric-label">摸鱼</span><span class="metric-value" data-rpg-field="STAT_SLACK">{{STAT_SLACK}}</span></span></div>
+              <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-9-9a5 5 0 0 1 8-5 5 5 0 0 1 8 5c-2 4.6-9 9-9 9z"/></svg><span><span class="metric-label">抗性</span><span class="metric-value" data-rpg-field="STAT_EMO">{{STAT_EMO}}</span></span></div>
+              <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.4 6.8H22l-6 4.4 2.3 6.8L12 15.8 5.7 20 8 13.2 2 8.8h7.6L12 2z"/></svg><span><span class="metric-label">运气</span><span class="metric-value" data-rpg-field="STAT_LUCK">{{STAT_LUCK}}</span></span></div>
+            </div>
+            <div class="card-footer">生成于 <span data-rpg-field="DATE">{{DATE}}</span> · NO.<span data-rpg-field="SERIAL">{{SERIAL}}</span></div>
+          </div>
+        </div>
+      </article>
+      <div class="card-actions"><button class="card-download" data-download-card data-busy-text="正在导出..." aria-label="下载第1张卡片"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg><span class="download-label">下载这一张</span></button></div>
+    </section>
+
+    <section class="card-block">
+      <article class="share-card analysis-card" id="card-analysis" data-card-kind="analysis" data-filename="rpg-me-02-analysis.png">
+        <div class="card-inner">
+          <span class="page-mark">02 / 04 · 角色解析</span>
+          <div>
+            <h2 class="analysis-title">为什么你是这个角色</h2>
+            <p class="card-lead">把日常状态翻译成 RPG 设定，短板也要变成可分享的梗。</p>
+            <p class="analysis-text" data-rpg-field="ANALYSIS">{{ANALYSIS}}</p>
+          </div>
+          <div class="quote-band"><span data-rpg-field="TAGLINE">{{TAGLINE}}</span>。你不是背景板，是正在推进剧情的主角。</div>
+          <div class="card-footer">生成于 <span data-rpg-field="DATE">{{DATE}}</span> · NO.<span data-rpg-field="SERIAL">{{SERIAL}}</span></div>
+        </div>
+      </article>
+      <div class="card-actions"><button class="card-download" data-download-card data-busy-text="正在导出..." aria-label="下载第2张卡片"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg><span class="download-label">下载这一张</span></button></div>
+    </section>
+
+    <section class="card-block">
+      <article class="share-card profile-card" id="card-profile" data-card-kind="profile" data-filename="rpg-me-03-profile.png">
+        <div class="card-inner">
+          <span class="page-mark">03 / 04 · RPG 面板</span>
+          <div class="title-row">
+            <div>
+              <h2 class="card-name" data-rpg-field="CHAR_NAME">{{CHAR_NAME}}</h2>
+              <p class="card-class" data-rpg-field="TITLE">{{TITLE}}</p>
+            </div>
+            <div class="level-badge">Lv.<span data-rpg-field="CHAR_LV">{{CHAR_LV}}</span></div>
+          </div>
+          <h3 class="section-title">基础数值</h3>
+          <div class="icon-grid">
+            <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4l6 6-3 3-6-6 3-3zM4 20l7-7"/></svg><span><span class="metric-label">力量</span><span class="metric-value" data-rpg-field="STAT_STRENGTH">{{STAT_STRENGTH}}</span></span></div>
+            <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3l-2 6h6l-6 12 2-8H7l6-10z"/></svg><span><span class="metric-label">敏捷</span><span class="metric-value" data-rpg-field="STAT_AGILITY">{{STAT_AGILITY}}</span></span></div>
+            <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3m6-16a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3M9 8h6M9 12h6M9 16h6"/></svg><span><span class="metric-label">智力</span><span class="metric-value" data-rpg-field="STAT_INTELLIGENCE">{{STAT_INTELLIGENCE}}</span></span></div>
+            <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-9-9a5 5 0 0 1 8-5 5 5 0 0 1 8 5c-2 4.6-9 9-9 9z"/></svg><span><span class="metric-label">HP</span><span class="metric-value" data-rpg-field="STAT_HP">{{STAT_HP}}</span></span></div>
+            <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c4 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 2-7 6-11z"/></svg><span><span class="metric-label">MP</span><span class="metric-value" data-rpg-field="STAT_MP">{{STAT_MP}}</span></span></div>
+            <div class="metric"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16V8m6 8V5m6 11v-6"/></svg><span><span class="metric-label">EXP</span><span class="metric-value" data-rpg-field="STAT_EXP">{{STAT_EXP}}</span></span></div>
+          </div>
+          <h3 class="section-title">角色标签</h3>
+          <div class="persona-grid">
+            <div class="trait-chip"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4-8 4-8-4 8-4zm-8 8 8 4 8-4M4 15l8 4 8-4"/></svg><span><span class="identity-label">种族</span><span class="identity-value" data-rpg-field="RACE">{{RACE}}</span></span></div>
+            <div class="trait-chip"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10l2 6-7 12L5 9l2-6zm-2 6h14M9 3l3 18 3-18"/></svg><span><span class="identity-label">特性</span><span class="identity-value" data-rpg-field="TRAIT">{{TRAIT}}</span></span></div>
+            <div class="trait-chip"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.4 6.8H22l-6 4.4 2.3 6.8L12 15.8 5.7 20 8 13.2 2 8.8h7.6L12 2z"/></svg><span><span class="identity-label">天赋</span><span class="identity-value" data-rpg-field="TALENT">{{TALENT}}</span></span></div>
+          </div>
+          <div class="card-footer">生成于 <span data-rpg-field="DATE">{{DATE}}</span> · NO.<span data-rpg-field="SERIAL">{{SERIAL}}</span></div>
+        </div>
+      </article>
+      <div class="card-actions"><button class="card-download" data-download-card data-busy-text="正在导出..." aria-label="下载第3张卡片"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg><span class="download-label">下载这一张</span></button></div>
+    </section>
+
+    <section class="card-block">
+      <article class="share-card skills-card" id="card-skills" data-card-kind="skills" data-filename="rpg-me-04-skills.png">
+        <div class="card-inner">
+          <span class="page-mark">04 / 04 · 技能组</span>
+          <h2 class="analysis-title">技能与任务</h2>
+          <div class="skill-panel">
+            <div class="skill-card">
+              <div class="skill-type">主动技能</div>
+              <div class="skill-name" data-rpg-field="ACTIVE_NAME">{{ACTIVE_NAME}}</div>
+              <div class="skill-desc" data-rpg-field="ACTIVE_DESC">{{ACTIVE_DESC}}</div>
+            </div>
+            <div class="skill-card">
+              <div class="skill-type">被动技能</div>
+              <div class="skill-name" data-rpg-field="PASSIVE_NAME">{{PASSIVE_NAME}}</div>
+              <div class="skill-desc" data-rpg-field="PASSIVE_DESC">{{PASSIVE_DESC}}</div>
+            </div>
+          </div>
+          <h3 class="section-title">当前任务</h3>
+          <ul class="quests" data-rpg-field="QUEST_LIST">{{QUEST_LIST}}</ul>
+          <div class="quote-band"><span data-rpg-field="TITLE">{{TITLE}}</span> 的通关方式：先把今天这关打完，再给明天留一点蓝。</div>
+          <div class="card-footer">生成于 <span data-rpg-field="DATE">{{DATE}}</span> · NO.<span data-rpg-field="SERIAL">{{SERIAL}}</span></div>
+        </div>
+      </article>
+      <div class="card-actions"><button class="card-download" data-download-card data-busy-text="正在导出..." aria-label="下载第4张卡片"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg><span class="download-label">下载这一张</span></button></div>
+    </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const statusNode = document.querySelector('.download-status');
+    const textOnlyFields = new Set([
+      'CHAR_NAME',
+      'CHAR_CLASS',
+      'TITLE',
+      'CHAR_LV',
+      'TAGLINE',
+      'STAT_HP',
+      'STAT_MP',
+      'STAT_EXP',
+      'STAT_STRENGTH',
+      'STAT_AGILITY',
+      'STAT_INTELLIGENCE',
+      'STAT_SOCIAL',
+      'STAT_CREATIVITY',
+      'STAT_SLACK',
+      'STAT_EMO',
+      'STAT_LUCK',
+      'RACE',
+      'TRAIT',
+      'TALENT',
+      'ACTIVE_NAME',
+      'ACTIVE_DESC',
+      'PASSIVE_NAME',
+      'PASSIVE_DESC',
+      'ANALYSIS',
+      'DATE',
+      'SERIAL'
+    ]);
+
+    function slugFilename(value) {
+      return String(value || 'rpg-me')
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, '-')
+        .replace(/\s+/g, '-')
+        .slice(0, 42) || 'rpg-me';
+    }
+
+    function updateDownloadNames(cardData) {
+      const base = slugFilename(cardData.SERIAL || cardData.CHAR_NAME || 'rpg-me');
+      const cards = document.querySelectorAll('.share-card');
+      const suffixes = ['01-cover', '02-analysis', '03-profile', '04-skills'];
+      cards.forEach(function (card, index) {
+        card.dataset.filename = base + '-' + suffixes[index] + '.png';
+      });
+    }
+
+    function applyHistoryRecord(record) {
+      if (!record || !record.cardData) {
+        return;
+      }
+      const data = record.cardData;
+      textOnlyFields.forEach(function (field) {
+        document.querySelectorAll('[data-rpg-field="' + field + '"]').forEach(function (node) {
+          node.textContent = data[field] || '';
+        });
+      });
+      document.querySelectorAll('[data-rpg-field="QUEST_LIST"]').forEach(function (node) {
+        node.innerHTML = data.QUEST_LIST || '';
+      });
+      document.querySelectorAll('[data-rpg-image]').forEach(function (image) {
+        image.src = record.portraitDataUri || image.src;
+      });
+      document.title = '人生游戏角色卡 - ' + (data.CHAR_NAME || '未命名角色');
+      updateDownloadNames(data);
+    }
+
+    document.querySelectorAll('.history-item[data-card-json]').forEach(function (item) {
+      item.addEventListener('click', function (event) {
+        try {
+          const record = JSON.parse(item.dataset.cardJson);
+          event.preventDefault();
+          applyHistoryRecord(record);
+          document.querySelectorAll('.history-item').forEach(function (node) {
+            node.classList.remove('is-active');
+            node.removeAttribute('aria-current');
+          });
+          item.classList.add('is-active');
+          item.setAttribute('aria-current', 'page');
+          setStatus('已切换到 ' + (record.cardData.CHAR_NAME || '这条记录') + '。');
+        } catch (error) {
+          // Keep the regular link behavior if embedded data is not parseable.
+        }
+      });
+    });
+
+    function setButtonBusy(button, busy) {
+      const label = button.querySelector('.download-label');
+      if (!button.dataset.idleText && label) {
+        button.dataset.idleText = label.textContent;
+      }
+      button.disabled = busy;
+      if (label) {
+        label.textContent = busy ? (button.dataset.busyText || '正在导出...') : button.dataset.idleText;
+      }
+    }
+
+    function setStatus(message) {
+      if (statusNode) {
+        statusNode.textContent = message;
+      }
+    }
+
+    function downloadCanvas(canvas, filename) {
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    function renderCard(card) {
+      if (typeof html2canvas === 'undefined') {
+        alert('下载组件未加载（可能是无网络）。可以直接对卡片截图分享。');
+        return Promise.reject(new Error('html2canvas unavailable'));
+      }
+      return html2canvas(card, {
+        backgroundColor: null,
+        scale: 3,
+        useCORS: true,
+        windowWidth: document.documentElement.clientWidth
+      });
+    }
+
+    document.querySelectorAll('[data-download-card]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        const card = button.closest('.card-block').querySelector('.share-card');
+        setButtonBusy(button, true);
+        setStatus('正在导出当前卡片...');
+        renderCard(card).then(function (canvas) {
+          downloadCanvas(canvas, card.dataset.filename || 'rpg-me-card.png');
+          setStatus('已导出 1 张 PNG。');
+        }).catch(function () {
+          setStatus('导出失败，可以直接截图分享。');
+        }).finally(function () {
+          setButtonBusy(button, false);
+        });
+      });
+    });
+
+    document.querySelector('[data-download-all]').addEventListener('click', function () {
+      const button = this;
+      const cards = Array.from(document.querySelectorAll('.share-card'));
+      setButtonBusy(button, true);
+      cards.reduce(function (chain, card, index) {
+        return chain.then(function () {
+          setStatus('正在导出 ' + (index + 1) + ' / ' + cards.length + '...');
+          return renderCard(card).then(function (canvas) {
+            downloadCanvas(canvas, card.dataset.filename || 'rpg-me-card.png');
+          });
+        });
+      }, Promise.resolve()).then(function () {
+        setStatus('已导出全部 4 张 PNG。');
+      }).catch(function () {
+        setStatus('导出中断，可以逐张截图分享。');
+      }).finally(function () {
+        setButtonBusy(button, false);
+      });
+    });
+  </script>
+</body>
+</html>

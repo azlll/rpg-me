@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+*.local
+local-image-api.md
+
+# Editor
+.vscode/
+.idea/

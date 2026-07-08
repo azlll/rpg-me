@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Render sample carousel cards from the HTML template."""
 
+import os
 import re
 import shutil
 from pathlib import Path
@@ -8,6 +9,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_PATH = ROOT / "scripts" / "card-template.html"
+VENDOR_ROOT = ROOT / "vendor"
+VENDOR_FILES = ("html2canvas.min.js", "html2canvas.LICENSE.txt")
+
+
+def copy_vendor_assets(output_root):
+    vendor_output = Path(output_root) / "vendor"
+    vendor_output.mkdir(parents=True, exist_ok=True)
+    for filename in VENDOR_FILES:
+        shutil.copyfile(VENDOR_ROOT / filename, vendor_output / filename)
+    return vendor_output
 
 
 def render_card(output_dir, portrait_path, data):
@@ -21,12 +32,18 @@ def render_card(output_dir, portrait_path, data):
     )
     output = ROOT / output_dir
     output.mkdir(parents=True, exist_ok=True)
+    output_root = ROOT / "output"
+    copy_vendor_assets(output_root)
     portrait_target = output / "portrait.png"
     shutil.copyfile(ROOT / portrait_path, portrait_target)
     replacements = {
         **data,
         "PORTRAIT_FILE": "portrait.png",
         "HISTORY_ITEMS": history_items,
+        "HTML2CANVAS_SRC": os.path.relpath(
+            output_root / "vendor" / "html2canvas.min.js",
+            output,
+        ).replace(os.sep, "/"),
     }
     html = template
     for key, value in replacements.items():

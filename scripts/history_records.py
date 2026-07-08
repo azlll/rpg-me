@@ -5,6 +5,7 @@ import argparse
 import base64
 import json
 import mimetypes
+import os
 import re
 import shutil
 from datetime import datetime
@@ -13,6 +14,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_PATH = ROOT / "scripts" / "card-template.html"
+VENDOR_ROOT = ROOT / "vendor"
+VENDOR_FILES = ("html2canvas.min.js", "html2canvas.LICENSE.txt")
 DEFAULT_HISTORY_ROOT = ROOT / "output" / "history"
 
 ATTRIBUTE_KEYS = [
@@ -91,7 +94,7 @@ def read_json(path, default):
     path = Path(path)
     if not path.is_file():
         return default
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def write_json(path, payload):
@@ -99,6 +102,22 @@ def write_json(path, payload):
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def copy_vendor_assets(output_root):
+    vendor_output = Path(output_root) / "vendor"
+    vendor_output.mkdir(parents=True, exist_ok=True)
+    for filename in VENDOR_FILES:
+        source = VENDOR_ROOT / filename
+        if not source.is_file():
+            raise FileNotFoundError(f"Missing vendor asset: {source}")
+        shutil.copyfile(source, vendor_output / filename)
+    return vendor_output
+
+
+def html2canvas_src_for(html_dir, output_root):
+    vendor_file = Path(output_root) / "vendor" / "html2canvas.min.js"
+    return os.path.relpath(vendor_file, Path(html_dir)).replace(os.sep, "/")
 
 
 def corrupted_text_fields(card_data, source_summary=""):
@@ -195,6 +214,9 @@ def portrait_filename(source_path):
 
 def copy_portrait(portrait_path, record_dir):
     source = Path(portrait_path)
+    if not source.is_file():
+        print(f"ERROR: portrait image not found: {source}")
+        raise SystemExit(2)
     target_name = portrait_filename(source)
     target = Path(record_dir) / target_name
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -268,12 +290,13 @@ def build_history_items(records, current_id):
     return "\n        ".join(history_item(record, current_id) for record in records)
 
 
-def render_template(card_data, portrait_file, history_items):
+def render_template(card_data, portrait_file, history_items, html2canvas_src):
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
     replacements = {
         **card_data,
         "PORTRAIT_FILE": portrait_file,
         "HISTORY_ITEMS": history_items,
+        "HTML2CANVAS_SRC": html2canvas_src,
     }
     html = template
     for key, value in replacements.items():
@@ -342,6 +365,8 @@ def write_history_index(history_root, records):
 
 def rebuild_history_pages(history_root):
     history_root = Path(history_root)
+    output_root = history_root.parent
+    copy_vendor_assets(output_root)
     records = load_records(history_root)
 
     normalized_records = []
@@ -380,7 +405,12 @@ def rebuild_history_pages(history_root):
     for record in normalized_records:
         record_dir = history_root / record["id"]
         history_items = build_history_items(normalized_records, record["id"])
-        html = render_template(record["cardData"], record.get("portraitFile", ""), history_items)
+        html = render_template(
+            record["cardData"],
+            record.get("portraitFile", ""),
+            history_items,
+            html2canvas_src_for(record_dir, output_root),
+        )
         (record_dir / "index.html").write_text(html, encoding="utf-8")
 
     write_history_index(history_root, normalized_records)

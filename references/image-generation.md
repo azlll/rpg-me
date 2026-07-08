@@ -2,56 +2,39 @@
 
 角色立绘是卡片的视觉核心。新架构下，图片始终作为文件保存到记录目录，HTML 只使用同级相对路径引用图片，再通过 `scripts/viewer_server.py` 本地查看；不要把图片内容写进 HTML。
 
-## 强制前置检查
+## 立绘来源
 
-**STOP：生成立绘、保存历史记录、启动本地查看器之前，必须先检查 `local-image-api.md`。** 该文件必须位于项目根目录，并且必须包含真实的 `DASHSCOPE_API_KEY` 与 `DASHSCOPE_WORKSPACE_ID`。如果文件不存在、字段为空，或字段仍是 `TODO` / `你的...` / `WORKSPACE_ID` 这类占位值，所有流程都不允许继续。
+本 skill 不需要 API Key，不读取用户凭证，也不主动请求外网生图服务。
 
-缺少配置时，先引导用户提供这两项：
+不能可靠判断用户有没有外部生图工具，只判断当前宿主 AI 助手是否有可用生图能力。角色设定完成后，先始终生成完整英文 prompt，再决定图片来源。
 
-```markdown
-DASHSCOPE_API_KEY=你的百炼APIKey
-DASHSCOPE_WORKSPACE_ID=你的WorkspaceId
-```
+宿主 AI 助手支持生图时，给用户三个选项：
 
-以下三项由脚本固定默认，不需要用户输入：
+- A 直接帮你生成立绘
+- B 你去别的生图工具生成，我等你把图片路径发回来
+- C 先用占位图生成预览卡
+
+宿主 AI 助手不能生图时，只给用户两个选项：
+
+- A 我去别的生图工具生成，稍后把图片路径发回来
+- B 先用占位图生成预览卡
+
+如果用户选择去别的工具生图，先保存 `output/pending/<pending-id>/card-data.json`、`output/pending/<pending-id>/prompt.txt`、`output/pending/<pending-id>/source-summary.txt`，再输出：
 
 ```text
-DASHSCOPE_REGION=cn-beijing
-DASHSCOPE_IMAGE_MODEL=wan2.7-image-pro
-DASHSCOPE_IMAGE_SIZE=1080*1080
+我已经写好你的立绘提示词：
+
+[English prompt]
+
+你可以复制到任意生图工具里。生成后保存图片，再把本地路径发给我，例如：
+D:\Downloads\rpg-hero.png
+
+我收到图片路径后，会继续生成角色卡和本地预览链接。
 ```
 
-无论哪种方式，最终产物都应是一个图片文件路径。把图片文件传给 `scripts/history_records.py`，脚本会复制到 `output/history/<record-id>/portrait.<ext>`，并让 `index.html` 用同级相对路径引用。
+用户带图片路径回来后，读取 pending 目录里的 `card-data.json` 和 `source-summary.txt`，把图片文件传给 `scripts/history_records.py`。脚本会复制到 `output/history/<record-id>/portrait.<ext>`，并让 `index.html` 用同级相对路径引用。
 
-## API 生图
-
-当环境没有内置生图能力时运行：
-
-```bash
-python scripts/generate_portrait.py "<英文提示词>" --out portrait.png
-```
-
-脚本只使用通义万相 / 阿里云百炼配置。把 key 和 Workspace ID 放在项目根目录的 `local-image-api.md`，该文件已被 `.gitignore` 排除，也不会被 `scripts/package_skill.py` 打进 `.skill` 包。
-
-```markdown
-DASHSCOPE_API_KEY=你的百炼APIKey
-DASHSCOPE_WORKSPACE_ID=你的WorkspaceId
-```
-
-配置项：
-
-| 配置项 | 说明 | 默认值 |
-| --- | --- | --- |
-| `DASHSCOPE_API_KEY` | 百炼 API Key | 必填 |
-| `DASHSCOPE_WORKSPACE_ID` | 百炼 Workspace ID | 必填 |
-| `DASHSCOPE_REGION` | 百炼地域 | 固定 `cn-beijing` |
-| `DASHSCOPE_IMAGE_MODEL` | 通义万相模型 | 固定 `wan2.7-image-pro` |
-| `DASHSCOPE_IMAGE_SIZE` | 输出尺寸 | 固定 `1080*1080` |
-| `DASHSCOPE_PROMPT_EXTEND` | 是否开启提示词智能改写 | `true` |
-| `DASHSCOPE_WATERMARK` | 是否加水印 | `false` |
-| `DASHSCOPE_NEGATIVE_PROMPT` | 负向提示词 | 空 |
-
-脚本会把图片保存到 `--out` 指定路径，并在 stdout 打印保存路径。
+如果用户暂时不提供图片，使用 `assets/placeholder-portrait.svg` 和同一份 pending 数据先生成可预览卡片；之后可替换真实立绘重新保存。
 
 ## 保存与查看
 
@@ -77,7 +60,7 @@ output/history/<record-id>/
 
 结构：`[明亮童话 JRPG 冒险世界] [人物画风] [角色身份/种族感] [服装/装备] [专属武器名称与外观] [姿势] [背景地点] [氛围光] [构图硬约束]`。
 
-立绘槽是 1:1 方形区域，通义万相默认尺寸为 `1080*1080`。提示词必须明确：`square composition, upper-body hero portrait, waist-up or chest-up framing, centered subject, face clearly visible, weapon clearly visible, enough headroom, visible torso and hands, simple fantasy background, no full-body shot, no tiny character, no text, no logo, no watermark`。
+立绘槽是 1:1 方形区域。提示词必须明确：`square composition, upper-body hero portrait, waist-up or chest-up framing, centered subject, face clearly visible, weapon clearly visible, enough headroom, visible torso and hands, simple fantasy background, no full-body shot, no tiny character, no text, no logo, no watermark`。
 
 原则：人物为主体、背景简洁、画面内无文字。若用户没有提供外貌，不要默认东亚人脸，可用剪影、动物拟人、Q 版、机械体等表现，风格与角色世界观一致。
 

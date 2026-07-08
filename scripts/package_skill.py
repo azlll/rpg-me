@@ -24,12 +24,13 @@ PACKAGE_FILES = [
     "assets/readme/rpg-me-cover-20260708-093202.jpg",
     "assets/readme/rpg-me-cover-20260708-103138.jpg",
     "references/image-generation.md",
-    "scripts/generate_portrait.py",
     "scripts/history_records.py",
     "scripts/package_skill.py",
     "scripts/render_sample_cards.py",
     "scripts/viewer_server.py",
     "scripts/card-template.html",
+    "vendor/html2canvas.min.js",
+    "vendor/html2canvas.LICENSE.txt",
 ]
 
 

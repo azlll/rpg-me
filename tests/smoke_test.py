@@ -1,7 +1,5 @@
 import importlib.util
-import io
 import json
-import os
 import re
 import socket
 import subprocess
@@ -9,12 +7,10 @@ import sys
 import tempfile
 import time
 import unittest
-import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
-from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,10 +24,6 @@ def load_module(name, rel_path):
     return module
 
 
-def load_generate_portrait():
-    return load_module("generate_portrait", "scripts/generate_portrait.py")
-
-
 def load_history_records():
     return load_module("history_records", "scripts/history_records.py")
 
@@ -43,225 +35,10 @@ def find_free_port():
 
 
 class SmokeTests(unittest.TestCase):
-    def test_generate_portrait_can_convert_placeholder_to_data_uri(self):
-        module = load_generate_portrait()
-
-        data_uri = module.to_data_uri(ROOT / "assets" / "placeholder-portrait.svg")
-
-        self.assertTrue(data_uri.startswith("data:image/svg+xml;base64,"))
-        self.assertIn("PHN2Zy", data_uri)
-
-    def test_generate_portrait_requires_api_configuration_when_generating(self):
-        module = load_generate_portrait()
-        originals = {
-            name: os.environ.get(name)
-            for name in (
-                "IMAGE_API_BASE",
-                "IMAGE_API_KEY",
-                "DASHSCOPE_API_KEY",
-                "DASHSCOPE_WORKSPACE_ID",
-                "RPG_ME_LOCAL_CONFIG",
-            )
-        }
-
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                out_path = Path(tmp) / "portrait.png"
-                os.environ.pop("IMAGE_API_BASE", None)
-                os.environ.pop("IMAGE_API_KEY", None)
-                os.environ.pop("DASHSCOPE_API_KEY", None)
-                os.environ.pop("DASHSCOPE_WORKSPACE_ID", None)
-                os.environ["RPG_ME_LOCAL_CONFIG"] = str(Path(tmp) / "missing-local-image-api.md")
-
-                with mock.patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                    with self.assertRaises(SystemExit) as raised:
-                        module.generate("cyber worker portrait", out_path)
-
-                self.assertEqual(2, raised.exception.code)
-                self.assertFalse(out_path.exists())
-                output = stdout.getvalue()
-                self.assertIn("local-image-api.md", output)
-                self.assertIn("DASHSCOPE_API_KEY", output)
-                self.assertIn("DASHSCOPE_WORKSPACE_ID", output)
-                self.assertIn("DASHSCOPE_REGION=cn-beijing", output)
-                self.assertIn("DASHSCOPE_IMAGE_MODEL=wan2.7-image-pro", output)
-                self.assertIn("DASHSCOPE_IMAGE_SIZE=1080*1080", output)
-                self.assertNotIn("IMAGE_API_BASE", output)
-                self.assertNotIn("placeholder", output.lower())
-        finally:
-            for name, value in originals.items():
-                if value is None:
-                    os.environ.pop(name, None)
-                else:
-                    os.environ[name] = value
-
-    def test_generate_portrait_prefers_dashscope_over_generic_api(self):
-        module = load_generate_portrait()
-        originals = {
-            name: os.environ.get(name)
-            for name in (
-                "DASHSCOPE_API_KEY",
-                "DASHSCOPE_WORKSPACE_ID",
-                "DASHSCOPE_REGION",
-                "DASHSCOPE_IMAGE_MODEL",
-                "DASHSCOPE_IMAGE_SIZE",
-                "IMAGE_API_BASE",
-                "IMAGE_API_KEY",
-                "RPG_ME_LOCAL_CONFIG",
-            )
-        }
-        calls = []
-
-        class FakeResponse:
-            def __init__(self, body):
-                self.body = body
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-            def read(self):
-                return self.body
-
-        def fake_urlopen(req, timeout=0):
-            calls.append(req)
-            if isinstance(req, urllib.request.Request):
-                payload = json.loads(req.data.decode("utf-8"))
-                self.assertEqual("wan2.7-image-pro", payload["model"])
-                self.assertEqual("worker hero", payload["input"]["messages"][0]["content"][0]["text"])
-                self.assertEqual("1080*1080", payload["parameters"]["size"])
-                body = json.dumps({
-                    "output": {
-                        "choices": [{
-                            "message": {
-                                "content": [{
-                                    "type": "image",
-                                    "image": "https://example.test/portrait.png",
-                                }]
-                            }
-                        }],
-                        "finished": True,
-                    }
-                }).encode("utf-8")
-                return FakeResponse(body)
-            self.assertEqual("https://example.test/portrait.png", req)
-            return FakeResponse(b"png-bytes")
-
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                config_path = Path(tmp) / "local-image-api.md"
-                config_path.write_text(
-                    "\n".join([
-                        "DASHSCOPE_API_KEY=local-key",
-                        "DASHSCOPE_WORKSPACE_ID=local-workspace",
-                    ]),
-                    encoding="utf-8",
-                )
-                out_path = Path(tmp) / "portrait.png"
-                os.environ["IMAGE_API_BASE"] = "https://generic.example/images"
-                os.environ["IMAGE_API_KEY"] = "generic-key"
-                os.environ["RPG_ME_LOCAL_CONFIG"] = str(config_path)
-                os.environ.pop("DASHSCOPE_API_KEY", None)
-                os.environ.pop("DASHSCOPE_WORKSPACE_ID", None)
-                os.environ.pop("DASHSCOPE_REGION", None)
-                os.environ.pop("DASHSCOPE_IMAGE_MODEL", None)
-                os.environ.pop("DASHSCOPE_IMAGE_SIZE", None)
-
-                with mock.patch.object(module.urllib.request, "urlopen", side_effect=fake_urlopen):
-                    module.generate("worker hero", out_path)
-
-                self.assertEqual(b"png-bytes", out_path.read_bytes())
-                self.assertEqual(2, len(calls))
-                first_request = calls[0]
-                self.assertIn(
-                    "https://local-workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
-                    first_request.full_url,
-                )
-                self.assertEqual("Bearer local-key", first_request.headers["Authorization"])
-        finally:
-            for name, value in originals.items():
-                if value is None:
-                    os.environ.pop(name, None)
-                else:
-                    os.environ[name] = value
-
-    def test_generate_portrait_blocks_placeholder_dashscope_workspace_even_with_generic_api(self):
-        module = load_generate_portrait()
-        originals = {
-            name: os.environ.get(name)
-            for name in (
-                "IMAGE_API_BASE",
-                "IMAGE_API_KEY",
-                "IMAGE_API_FORMAT",
-                "RPG_ME_LOCAL_CONFIG",
-                "DASHSCOPE_API_KEY",
-                "DASHSCOPE_WORKSPACE_ID",
-            )
-        }
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                config_path = Path(tmp) / "local-image-api.md"
-                config_path.write_text(
-                    "\n".join([
-                        "DASHSCOPE_API_KEY=local-key",
-                        "DASHSCOPE_WORKSPACE_ID=TODO_FILL_WORKSPACE_ID",
-                    ]),
-                    encoding="utf-8",
-                )
-                out_path = Path(tmp) / "portrait.png"
-                os.environ["RPG_ME_LOCAL_CONFIG"] = str(config_path)
-                os.environ["IMAGE_API_BASE"] = "https://generic.example/images"
-                os.environ["IMAGE_API_KEY"] = "generic-key"
-                os.environ["IMAGE_API_FORMAT"] = "zhipu"
-                os.environ.pop("DASHSCOPE_API_KEY", None)
-                os.environ.pop("DASHSCOPE_WORKSPACE_ID", None)
-
-                with mock.patch.object(module.urllib.request, "urlopen") as urlopen:
-                    with mock.patch("sys.stdout", new_callable=io.StringIO) as stdout:
-                        with self.assertRaises(SystemExit) as raised:
-                            module.generate("fallback hero", out_path)
-
-                self.assertEqual(2, raised.exception.code)
-                self.assertFalse(out_path.exists())
-                urlopen.assert_not_called()
-                output = stdout.getvalue()
-                self.assertIn("DASHSCOPE_WORKSPACE_ID", output)
-                self.assertIn("local-image-api.md", output)
-                self.assertNotIn("IMAGE_API_BASE", output)
-        finally:
-            for name, value in originals.items():
-                if value is None:
-                    os.environ.pop(name, None)
-                else:
-                    os.environ[name] = value
-
-    def test_generate_portrait_can_read_dashscope_local_markdown_config(self):
-        module = load_generate_portrait()
-
-        with tempfile.TemporaryDirectory() as tmp:
-            config_path = Path(tmp) / "local-image-api.md"
-            config_path.write_text(
-                "\n".join([
-                    "# local image API",
-                    "DASHSCOPE_API_KEY=local-key",
-                    "DASHSCOPE_WORKSPACE_ID=local-workspace",
-                    "DASHSCOPE_REGION=cn-beijing",
-                ]),
-                encoding="utf-8",
-            )
-
-            config = module.load_local_config(config_path)
-
-        self.assertEqual("local-key", config["DASHSCOPE_API_KEY"])
-        self.assertEqual("local-workspace", config["DASHSCOPE_WORKSPACE_ID"])
-        self.assertEqual("cn-beijing", config["DASHSCOPE_REGION"])
-
     def test_card_template_placeholders_stay_complete(self):
         template = (ROOT / "scripts" / "card-template.html").read_text(encoding="utf-8")
 
-        placeholders = set(re.findall(r"{{([A-Z_]+)}}", template))
+        placeholders = set(re.findall(r"{{([A-Z0-9_]+)}}", template))
 
         self.assertEqual(
             {
@@ -295,12 +72,15 @@ class SmokeTests(unittest.TestCase):
                 "DATE",
                 "SERIAL",
                 "HISTORY_ITEMS",
+                "HTML2CANVAS_SRC",
             },
             placeholders,
         )
         self.assertNotIn("PORTRAIT_DATA_URI", template)
         self.assertNotIn("data-card-json", template)
         self.assertNotIn("data:image", template)
+        self.assertNotIn("cdnjs.cloudflare.com", template)
+        self.assertIn('<script defer src="{{HTML2CANVAS_SRC}}"></script>', template)
 
     def test_card_template_declares_utf8_before_non_ascii_content(self):
         template = (ROOT / "scripts" / "card-template.html").read_text(encoding="utf-8")
@@ -414,15 +194,17 @@ class SmokeTests(unittest.TestCase):
             first_html = (history_root / first["id"] / "index.html").read_text(encoding="utf-8")
             second_html = (history_root / second["id"] / "index.html").read_text(encoding="utf-8")
             self.assertIn('src="portrait.svg"', first_html)
+            self.assertIn('src="../../vendor/html2canvas.min.js"', first_html)
             self.assertIn("夜班咖啡骑士", first_html)
             self.assertIn("周末地图师", first_html)
             self.assertIn('aria-current="page"', first_html)
             self.assertIn("../" + second["id"] + "/index.html", first_html)
             self.assertIn("../" + first["id"] + "/index.html", second_html)
-            self.assertNotRegex(second_html, r"{{[A-Z_]+}}")
+            self.assertNotRegex(second_html, r"{{[A-Z0-9_]+}}")
             self.assertNotIn("data:image", first_html)
             self.assertNotIn("base64", first_html)
             self.assertNotIn("data-card-json", first_html)
+            self.assertTrue((history_root.parent / "vendor" / "html2canvas.min.js").is_file())
 
     def test_history_records_rejects_question_mark_corrupted_card_data(self):
         module = load_history_records()
@@ -444,6 +226,87 @@ class SmokeTests(unittest.TestCase):
                 )
 
         self.assertEqual(2, raised.exception.code)
+
+    def test_history_records_accepts_utf8_bom_json_input(self):
+        card_data = {
+            "CHAR_NAME": "返程提示词法师",
+            "CHAR_CLASS": "本地图片接线员",
+            "TITLE": "把外部立绘接回角色卡的人",
+            "CHAR_LV": "30",
+            "TAGLINE": "先存档，再回来继续",
+            "ATTR_WORK_SMELL": "42",
+            "ATTR_CHILL_BALANCE": "58",
+            "ATTR_STUBBORN_STAMINA": "66",
+            "ATTR_SOCIAL_BATTERY": "40",
+            "ATTR_MEME_BRAIN": "74",
+            "ATTR_LUCK_DROP": "55",
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            data_path = tmp_path / "card-data.json"
+            data_path.write_text(json.dumps(card_data, ensure_ascii=False), encoding="utf-8-sig")
+            history_root = tmp_path / "history"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts" / "history_records.py"),
+                    "--data",
+                    str(data_path),
+                    "--portrait",
+                    str(ROOT / "assets" / "placeholder-portrait.svg"),
+                    "--history-root",
+                    str(history_root),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual("", result.stderr)
+            self.assertEqual(0, result.returncode, result.stdout)
+            self.assertIn("SAVED:", result.stdout)
+
+    def test_history_records_reports_missing_portrait_path_clearly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            data_path = tmp_path / "card-data.json"
+            missing_portrait = tmp_path / "missing.png"
+            data_path.write_text(
+                json.dumps(
+                    {
+                        "CHAR_NAME": "缺图提示员",
+                        "CHAR_CLASS": "路径检查师",
+                        "TITLE": "先把图片找回来的人",
+                        "CHAR_LV": "28",
+                        "TAGLINE": "没有图也要说清楚",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts" / "history_records.py"),
+                    "--data",
+                    str(data_path),
+                    "--portrait",
+                    str(missing_portrait),
+                    "--history-root",
+                    str(tmp_path / "history"),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            combined_output = result.stdout + result.stderr
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("ERROR: portrait image not found:", combined_output)
+            self.assertIn(str(missing_portrait), combined_output)
 
     def test_history_records_migrates_legacy_portrait_data_uri(self):
         module = load_history_records()
@@ -527,10 +390,13 @@ class SmokeTests(unittest.TestCase):
             "output/rpg-card-codex-worker-share/index.html",
         ):
             html = (ROOT / rel_path).read_text(encoding="utf-8")
-            self.assertNotRegex(html, r"{{[A-Z_]+}}")
+            self.assertNotRegex(html, r"{{[A-Z0-9_]+}}")
             self.assertNotIn("data:image", html)
+            self.assertNotIn("cdnjs.cloudflare.com", html)
+            self.assertIn('src="../vendor/html2canvas.min.js"', html)
             self.assertIn('src="portrait.png"', html)
             self.assertTrue((ROOT / Path(rel_path).parent / "portrait.png").is_file())
+        self.assertTrue((ROOT / "output" / "vendor" / "html2canvas.min.js").is_file())
 
     def test_viewer_server_starts_reuses_exposes_apis_and_stops(self):
         module = load_history_records()
@@ -638,20 +504,24 @@ class SmokeTests(unittest.TestCase):
             self.assertIn("scripts/viewer_server.py", doc)
             self.assertNotIn("base64 内嵌", doc)
             self.assertNotIn("data URI 内嵌", doc)
+            self.assertIn("不需要 API Key", doc)
+            self.assertIn("宿主 AI 助手", doc)
+            self.assertNotIn("DASHSCOPE", doc)
+            self.assertNotIn("local-image-api", doc)
+            self.assertIn("我已经写好你的立绘提示词", doc)
+            self.assertIn("D:\\Downloads\\rpg-hero.png", doc)
+            self.assertIn("我收到图片路径后，会继续生成角色卡和本地预览链接", doc)
+            self.assertIn("先用占位图生成预览卡", doc)
+            self.assertIn("output/pending", doc)
+            self.assertIn("prompt.txt", doc)
+            self.assertIn("source-summary.txt", doc)
         for text in ("职业", "年龄", "性别", "班味浓度", "松弛余额", "嘴硬续航"):
             self.assertIn(text, skill)
         self.assertIn("py -3", skill)
         self.assertIn("python3", skill)
         self.assertIn("python", skill)
-        self.assertIn("STOP", skill)
-        self.assertIn("不允许继续", skill)
-        for doc in (skill, readme, image_doc):
-            self.assertIn("local-image-api.md", doc)
-            self.assertIn("DASHSCOPE_API_KEY", doc)
-            self.assertIn("DASHSCOPE_WORKSPACE_ID", doc)
-            self.assertNotIn("IMAGE_API_BASE", doc)
-            self.assertNotIn("通用文生图 API 回退", doc)
-            self.assertNotIn("没有任何 API 时使用", doc)
+        self.assertIn("127.0.0.1", readme)
+        self.assertIn("本地写入", readme)
 
     def test_docs_describe_three_step_markdown_table_question_flow(self):
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -702,6 +572,7 @@ class SmokeTests(unittest.TestCase):
             "年龄或年龄段：80后",
             "性别或角色呈现：男",
             "外观要求：外向技术宅，有 AI 小跟班",
+            "不想要的元素：不要真实疾病/心理诊断",
         ):
             self.assertIn(example_part, readme)
 
@@ -787,12 +658,13 @@ class SmokeTests(unittest.TestCase):
                 self.assertIn("rpg-me/assets/readme/rpg-me-cover-20260708-103138.jpg", names)
                 self.assertIn("rpg-me/scripts/card-template.html", names)
                 self.assertIn("rpg-me/scripts/viewer_server.py", names)
-                self.assertIn("rpg-me/scripts/generate_portrait.py", names)
                 self.assertIn("rpg-me/scripts/history_records.py", names)
                 self.assertIn("rpg-me/scripts/package_skill.py", names)
                 self.assertIn("rpg-me/scripts/render_sample_cards.py", names)
+                self.assertIn("rpg-me/vendor/html2canvas.min.js", names)
+                self.assertIn("rpg-me/vendor/html2canvas.LICENSE.txt", names)
                 self.assertNotIn("rpg-me/assets/card-template.html", names)
-                self.assertNotIn("rpg-me/local-image-api.md", names)
+                self.assertNotIn("rpg-me/scripts/generate_portrait.py", names)
 
     def test_dist_package_check_generates_temp_artifact_instead_of_requiring_existing_dist(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -813,13 +685,7 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("rpg-me/LICENSE", names)
         self.assertIn("rpg-me/VERSION", names)
 
-    def test_dist_package_does_not_include_local_image_config_secret(self):
-        module = load_generate_portrait()
-        local_config = module.load_local_config(ROOT / "local-image-api.md")
-        key = local_config.get("DASHSCOPE_API_KEY", "").encode("utf-8")
-        if not key:
-            self.skipTest("local-image-api.md has no DASHSCOPE_API_KEY")
-
+    def test_dist_package_does_not_include_api_or_cdn_risk_markers(self):
         with tempfile.TemporaryDirectory() as tmp:
             package_path = Path(tmp) / "rpg-me.skill"
             subprocess.run(
@@ -831,9 +697,25 @@ class SmokeTests(unittest.TestCase):
             )
             with zipfile.ZipFile(package_path) as archive:
                 names = set(archive.namelist())
-                self.assertNotIn("rpg-me/local-image-api.md", names)
-                for name in names:
-                    self.assertNotIn(key, archive.read(name))
+                forbidden_names = {
+                    "rpg-me/local-image-api.md",
+                    "rpg-me/scripts/generate_portrait.py",
+                }
+                self.assertFalse(forbidden_names & names)
+                combined_text = "\n".join(
+                    archive.read(name).decode("utf-8", "ignore")
+                    for name in names
+                    if not name.lower().endswith((".png", ".jpg", ".jpeg"))
+                )
+                for marker in (
+                    "DASHSCOPE",
+                    "local-image-api",
+                    "API_KEY",
+                    "Bearer ",
+                    "cdnjs.cloudflare.com",
+                    "maas.aliyuncs.com",
+                ):
+                    self.assertNotIn(marker, combined_text)
 
 
 if __name__ == "__main__":

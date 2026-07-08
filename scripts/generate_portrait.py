@@ -2,25 +2,23 @@
 """
 generate_portrait.py — 人生游戏角色卡的稳定生图脚本
 
-当 agent 环境没有内置生图能力时，用它通过第三方文生图 API 出图。
-也可以把已有图片转成 base64 data URI 内嵌进 HTML。
+当 agent 环境没有内置生图能力时，用它通过通义万相 / 阿里云百炼 API 出图。
+保留 --to-datauri 仅用于兼容旧记录或调试；新卡片应把图片作为文件交给
+history_records.py，由本地 viewer 用相对路径读取。
 
 用法：
     # 通过配置的 API 生成图片
     python generate_portrait.py "<英文提示词>" --out portrait.png
 
-    # 把已有图片转成 data URI（打印到 stdout）
+    # 兼容旧记录：把已有图片转成 data URI（打印到 stdout）
     python generate_portrait.py --to-datauri portrait.png
 
 环境变量（生成图片时需要）：
-    DASHSCOPE_API_KEY       百炼 API Key（优先）
-    DASHSCOPE_WORKSPACE_ID  百炼 Workspace ID（优先）
-    DASHSCOPE_IMAGE_MODEL   通义万相模型名（可选，默认 wan2.7-image-pro）
-    DASHSCOPE_IMAGE_SIZE    输出尺寸（可选，默认 1080*1080）
-    IMAGE_API_BASE    文生图接口地址（必填）
-    IMAGE_API_KEY     API 密钥（必填）
-    IMAGE_API_MODEL   模型名（可选）
-    IMAGE_API_FORMAT  响应格式 openai | zhipu | raw_url（可选，默认 openai）
+    RPG_ME_LOCAL_CONFIG     可选，覆盖 local-image-api.md 路径（测试/调试用）
+
+local-image-api.md（生成图片时必须配置）：
+    DASHSCOPE_API_KEY       百炼 API Key
+    DASHSCOPE_WORKSPACE_ID  百炼 Workspace ID
 """
 
 import sys
@@ -37,11 +35,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL_CONFIG_PATH = ROOT / "local-image-api.md"
 DASHSCOPE_SYNC_PATH = "/api/v1/services/aigc/multimodal-generation/generation"
+DASHSCOPE_REGION = "cn-beijing"
+DASHSCOPE_IMAGE_MODEL = "wan2.7-image-pro"
+DASHSCOPE_IMAGE_SIZE = "1080*1080"
+
+
+def resolve_local_config_path(path=None):
+    if path:
+        return Path(path)
+    return Path(os.environ.get("RPG_ME_LOCAL_CONFIG", LOCAL_CONFIG_PATH))
 
 
 def load_local_config(path=None):
     """Read KEY=VALUE pairs from a local markdown file without requiring dotenv."""
-    config_path = Path(path) if path else Path(os.environ.get("RPG_ME_LOCAL_CONFIG", LOCAL_CONFIG_PATH))
+    config_path = resolve_local_config_path(path)
     if not config_path.is_file():
         return {}
 
@@ -77,9 +84,11 @@ def is_placeholder(value):
     normalized = value.strip().lower()
     return (
         not normalized
+        or normalized in ("none", "null", "xxx", "changeme")
         or normalized.startswith("todo")
         or normalized.startswith("fill_")
         or normalized.startswith("replace_")
+        or "api_key" in normalized
         or "workspace_id" in normalized
         or "your_" in normalized
         or "你的" in normalized
@@ -93,46 +102,48 @@ def to_data_uri(path):
     return f"data:{mime};base64,{b64}"
 
 
-def print_config_help():
+def dashscope_config_errors(local_config, config_path):
+    errors = []
+    if not config_path.is_file():
+        errors.append(f"未找到配置文件：{config_path}")
+
+    for key in ("DASHSCOPE_API_KEY", "DASHSCOPE_WORKSPACE_ID"):
+        value = local_config.get(key, "").strip()
+        if is_placeholder(value):
+            errors.append(f"{key} 缺失或仍是占位值")
+
+    return errors
+
+
+def print_config_help(errors=None):
+    error_lines = ""
+    if errors:
+        error_lines = "\n".join(f"  - {item}" for item in errors)
+        error_lines = f"\n检测结果：\n{error_lines}\n"
+
     msg = """
-[配置缺失] 当前环境未检测到可用生图 API。
+[配置缺失] rpg-me 必须先配置通义万相 / 阿里云百炼生图，当前流程已停止。
+{error_lines}
+请在项目根目录创建或更新 local-image-api.md，只填写这两项：
+  DASHSCOPE_API_KEY=你的百炼APIKey
+  DASHSCOPE_WORKSPACE_ID=你的WorkspaceId
 
-优先推荐配置通义万相 / 阿里云百炼（不会把 key 打包进 skill）：
-  1. 在项目根目录创建 local-image-api.md
-  2. 写入：
-     DASHSCOPE_API_KEY=你的百炼APIKey
-     DASHSCOPE_WORKSPACE_ID=你的WorkspaceId
-     DASHSCOPE_REGION=cn-beijing
-  文档：
-     https://bailian.console.aliyun.com/cn-beijing?tab=api#/api/?type=model&url=3026980
+以下三项已固定默认，不需要你填写：
+  DASHSCOPE_REGION=cn-beijing
+  DASHSCOPE_IMAGE_MODEL=wan2.7-image-pro
+  DASHSCOPE_IMAGE_SIZE=1080*1080
 
-也可以使用环境变量：
-  DASHSCOPE_API_KEY       百炼 API Key
-  DASHSCOPE_WORKSPACE_ID  百炼 Workspace ID
-  DASHSCOPE_IMAGE_MODEL   可选，默认 wan2.7-image-pro
-  DASHSCOPE_IMAGE_SIZE    可选，默认 1080*1080
-
-若不使用通义万相，请设置以下通用 API 环境变量后重试：
-
-  IMAGE_API_BASE   文生图接口地址（必填）
-  IMAGE_API_KEY    API 密钥（必填）
-  IMAGE_API_MODEL  模型名（可选）
-  IMAGE_API_FORMAT 响应格式 openai | zhipu | raw_url（可选，默认 openai）
-
-示例（智谱 CogView，Windows PowerShell）：
-  $env:IMAGE_API_BASE="https://open.bigmodel.cn/api/paas/v4/images/generations"
-  $env:IMAGE_API_KEY="你的key"
-  $env:IMAGE_API_MODEL="cogview-3-flash"
-  $env:IMAGE_API_FORMAT="zhipu"
-
-示例（OpenAI 兼容，macOS/Linux）：
-  export IMAGE_API_BASE="https://api.openai.com/v1/images/generations"
-  export IMAGE_API_KEY="sk-..."
-  export IMAGE_API_MODEL="dall-e-3"
-
-配置完成后重新运行本脚本即可。若暂时不想配置，skill 会自动使用占位图。
-"""
+配置完成后重新运行本脚本。配置文档：
+  https://bailian.console.aliyun.com/cn-beijing?tab=api#/api/?type=model&url=3026980
+""".format(error_lines=error_lines.rstrip())
     print(msg.strip())
+
+
+def require_dashscope_config(local_config, config_path):
+    errors = dashscope_config_errors(local_config, config_path)
+    if errors:
+        print_config_help(errors)
+        sys.exit(2)
 
 
 def fetch_bytes(url):
@@ -170,14 +181,11 @@ def extract_dashscope_image_url(result):
 
 
 def generate_with_dashscope(prompt, out_path, local_config):
-    key = get_config("DASHSCOPE_API_KEY", local_config)
-    workspace_id = get_config("DASHSCOPE_WORKSPACE_ID", local_config)
-    if is_placeholder(key) or is_placeholder(workspace_id):
-        return False
-
-    region = get_config("DASHSCOPE_REGION", local_config, "cn-beijing")
-    model = get_config("DASHSCOPE_IMAGE_MODEL", local_config, "wan2.7-image-pro")
-    size = get_config("DASHSCOPE_IMAGE_SIZE", local_config, "1080*1080")
+    key = local_config["DASHSCOPE_API_KEY"].strip()
+    workspace_id = local_config["DASHSCOPE_WORKSPACE_ID"].strip()
+    region = DASHSCOPE_REGION
+    model = DASHSCOPE_IMAGE_MODEL
+    size = DASHSCOPE_IMAGE_SIZE
     negative_prompt = get_config("DASHSCOPE_NEGATIVE_PROMPT", local_config, "")
     prompt_extend = parse_bool(get_config("DASHSCOPE_PROMPT_EXTEND", local_config, "true"), True)
     watermark = parse_bool(get_config("DASHSCOPE_WATERMARK", local_config, "false"), False)
@@ -240,82 +248,10 @@ def generate_with_dashscope(prompt, out_path, local_config):
 
 
 def generate(prompt, out_path):
+    config_path = resolve_local_config_path()
     local_config = load_local_config()
-    if generate_with_dashscope(prompt, out_path, local_config):
-        return
-
-    base = os.environ.get("IMAGE_API_BASE", "").strip()
-    key = os.environ.get("IMAGE_API_KEY", "").strip()
-    model = os.environ.get("IMAGE_API_MODEL", "").strip()
-    fmt = os.environ.get("IMAGE_API_FORMAT", "openai").strip().lower()
-
-    if not base or not key:
-        print_config_help()
-        sys.exit(2)
-
-    payload = {"prompt": prompt}
-    if model:
-        payload["model"] = model
-    # OpenAI 风格默认请求 b64，减少二次下载
-    if fmt == "openai":
-        payload["response_format"] = "b64_json"
-        payload["n"] = 1
-        payload["size"] = "1024x1792"
-
-    data = json.dumps(payload).encode("utf-8")
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {key}",
-    }
-
-    req = urllib.request.Request(base, data=data, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            raw = resp.read().decode("utf-8")
-    except urllib.error.HTTPError as e:
-        print(f"ERROR: 生图 API 返回错误 {e.code}: {e.read().decode('utf-8', 'ignore')}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"ERROR: 请求生图 API 失败: {e}")
-        sys.exit(1)
-
-    img_bytes = None
-
-    if fmt == "raw_url":
-        url = raw.strip().strip('"')
-        img_bytes = fetch_bytes(url)
-    else:
-        try:
-            result = json.loads(raw)
-        except json.JSONDecodeError:
-            # 也许直接返回了 URL
-            img_bytes = fetch_bytes(raw.strip().strip('"'))
-            result = None
-
-        if img_bytes is None:
-            items = result.get("data") or result.get("images") or []
-            if not items:
-                print(f"ERROR: 无法从响应中解析图片：{raw[:500]}")
-                sys.exit(1)
-            first = items[0]
-            if isinstance(first, dict):
-                if first.get("b64_json"):
-                    img_bytes = base64.b64decode(first["b64_json"])
-                elif first.get("url"):
-                    img_bytes = fetch_bytes(first["url"])
-            elif isinstance(first, str):
-                if first.startswith("http"):
-                    img_bytes = fetch_bytes(first)
-                else:
-                    img_bytes = base64.b64decode(first)
-
-    if not img_bytes:
-        print(f"ERROR: 未能获得图片数据：{raw[:500]}")
-        sys.exit(1)
-
-    with open(out_path, "wb") as f:
-        f.write(img_bytes)
-    print(f"SAVED: {out_path}")
+    require_dashscope_config(local_config, config_path)
+    generate_with_dashscope(prompt, out_path, local_config)
 
 
 def main():
@@ -323,7 +259,7 @@ def main():
     parser.add_argument("prompt", nargs="?", help="英文提示词")
     parser.add_argument("--out", default="portrait.png", help="输出图片路径")
     parser.add_argument("--to-datauri", metavar="IMAGE_PATH",
-                        help="把指定图片转成 base64 data URI 并打印")
+                        help="兼容旧记录：把指定图片转成 data URI 并打印")
     args = parser.parse_args()
 
     if args.to_datauri:

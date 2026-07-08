@@ -18,12 +18,15 @@ PACKAGE_FILES = [
     "LICENSE",
     "VERSION",
     "SKILL.md",
-    "assets/card-template.html",
     "assets/placeholder-portrait.svg",
     "assets/portrait-sample.png",
     "references/image-generation.md",
     "scripts/generate_portrait.py",
     "scripts/history_records.py",
+    "scripts/package_skill.py",
+    "scripts/render_sample_cards.py",
+    "scripts/viewer_server.py",
+    "scripts/card-template.html",
 ]
 
 

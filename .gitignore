@@ -11,6 +11,10 @@ Thumbs.db
 *.local
 local-image-api.md
 
+# Local generated artifacts
+output/
+dist/
+
 # Editor
 .vscode/
 .idea/
